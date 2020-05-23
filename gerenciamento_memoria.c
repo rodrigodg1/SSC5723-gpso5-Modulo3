@@ -27,7 +27,7 @@ typedef struct _BLOCO
 #define TAM_BLOCO sizeof(BLOCO)
 
 // recebe o tamanho que precisa alocar e adiciona um novo no na lista
-
+// primeiro bloco
 BLOCO *alocaBlocoMemoria(size_t tamanho)
 {
 
@@ -55,6 +55,7 @@ BLOCO *alocaBlocoMemoria(size_t tamanho)
     }
 }
 
+//insere na sequencia da lista encadeada
 void alocaProxBlocoMemoria(size_t tamanho, BLOCO **primeiro)
 {
     BLOCO *atual = *primeiro;
