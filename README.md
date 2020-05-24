@@ -4,7 +4,7 @@
 
 ## Como Compilar ?
 ```bash
-gcc -w gerenciamento_memoria.c
+g++ main.cpp
 ```
 ## Como Executar ?
 ```bash
