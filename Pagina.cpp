@@ -6,6 +6,6 @@ public:
     int idQuadro;
     int contador;
     bool livre;
-    size_t tamanho;
-    char* nomeProcesso;
+    int tamanho;
+    char *nomeProcesso;
 };
