@@ -5,12 +5,12 @@
 #include <iostream>
 #include <algorithm>
 #include <ctype.h>
+#include <unistd.h>
 #include "Cpu.cpp"
 #include "DispositivoES.cpp"
 #include "Pagina.cpp"
 #include "Processo.cpp"
-
-#define MAX_PROCESSES 100
+#include "Quadro.cpp"
 
 /* Função usada para obter o tamanho de um processo a partir de uma linha do arquivo */
 int obterTamanho(char *linha)
@@ -37,11 +37,11 @@ int obterEndereco(char *linha)
 {
     char enderecoStr[4];
 
-    for (int i = 5; linha[i] != ')'; i++)
+    for (int i = 6; linha[i] != ')'; i++)
     {
         if (isdigit(linha[i]))
         {
-            enderecoStr[i - 5] = linha[i];
+            enderecoStr[i - 6] = linha[i];
         }
         else
         {
@@ -53,31 +53,81 @@ int obterEndereco(char *linha)
 }
 
 /* Função para executar o LRU e retornar o ID do quadro a ser ocupado (ou da vítima) */
-int executarLru(Pagina *quadros, int quantidadeDePaginas)
+int executarLru(
+    Quadro **quadros,
+    int quantidadeDeQuadros,
+    int *chamadas,
+    int numChamadas)
 {
-    int menorValor = 0;
-    int menorId = -1;
-
-    for (int i = 0; i < quantidadeDePaginas; i++)
+    // Se houver quadro livre, não precisa realizar swap
+    for (int i = 0; i < quantidadeDeQuadros; i++)
     {
-        if (quadros[i].livre)
+        if (quadros[i]->livre)
         {
             return i;
         }
-
-        if (quadros[i].contador < menorValor)
-        {
-            menorValor = quadros[i].contador;
-            menorId = i;
-        }
     }
 
-    quadros[menorId].livre = 1;
-    return menorId;
+    int contador = 0;
+
+    // Se não houver, procura pelas chamadas pela mais antiga que ainda não sofreu swap
+    for (int i = numChamadas; i >= 0; i--)
+    {
+        bool temNovaChamada = 0;
+
+        // Procura se chamada ao quadro foi repetida posteriormente (a partir da segunda iteração)
+        if (i != numChamadas) {
+            for (int j = i + 1; j < numChamadas; j++)
+            {
+                if (chamadas[i] == chamadas[j])
+                {
+                    temNovaChamada = 1;
+                    break;
+                }
+            }
+        }
+
+        // Se o quadro não foi chamado após, incrementa o contador (quadro em uso)
+        if (!temNovaChamada) {
+            contador++;
+
+            // Se o contador for igual à quantidade de quadros, esse é o quadro a ser removido
+            if (contador > quantidadeDeQuadros) {
+                quadros[chamadas[i]]->livre = 1;
+                return chamadas[i];
+            }
+        }
+    }
+}
+
+// Função para atualizar a lista de chamadas aos quadros com uma nova
+int *atualizaChamadas(
+    int idQuadro, 
+    int numChamadas, 
+    int *chamadas)
+{
+    int *novasChamadas;
+
+    if (numChamadas == 0)
+    {
+        novasChamadas = (int *)malloc(sizeof(int));
+    }
+    else
+    {
+        novasChamadas = (int *)realloc(chamadas, sizeof(int) * numChamadas + 1);
+    }
+
+    novasChamadas[numChamadas] = idQuadro;
+
+    return novasChamadas;
 }
 
 /* Função usada para alocar as páginas de um processo */
-void alocarPaginas(Processo processo, int tamanhoPagina, int quantidadeDePaginas, int tamanho)
+Processo *alocarPaginas(
+    Processo *processo,
+    int tamanhoPagina,
+    int quantidadeDePaginas,
+    int tamanho)
 {
     Pagina **paginas = new Pagina *[quantidadeDePaginas];
 
@@ -91,82 +141,114 @@ void alocarPaginas(Processo processo, int tamanhoPagina, int quantidadeDePaginas
         paginas[i] = pagina;
     }
 
-    processo.paginas = *paginas;
+    (*processo).paginas = *paginas;
+
+    return processo;
 }
 
 /* Função usada para alocar os quadros ocupados por um processo na memória principal */
-int *alocarQuadros(Processo *processo, Pagina *quadros, int quantidadeDePaginas, int tamanho, int tamanhoPagina)
+int alocarQuadros(
+    Processo *processo,
+    Quadro **quadros,
+    int quantidadeDeQuadros,
+    int tamanho, 
+    int tamanhoPagina,
+    int **chamadas,
+    int numChamadas)
 {
     int quantidadeAAlocar = tamanho / tamanhoPagina;
-    int *idQuadros = (int *)calloc(quantidadeAAlocar, sizeof(int));
+
+    if (quantidadeAAlocar == 0)
+    {
+        quantidadeAAlocar = 1;
+    }
 
     for (int i = 0; i < quantidadeAAlocar; i++)
     {
-        int idQuadro = executarLru(quadros, quantidadeDePaginas);
+        int idQuadro = executarLru(quadros, quantidadeDeQuadros, *chamadas, numChamadas);
         processo->paginas[i].idQuadro = idQuadro;
         processo->paginas[i].livre = 0;
-        quadros[idQuadro].nomeProcesso = processo->nome;
-        quadros[idQuadro].livre = 0;
+        quadros[idQuadro]->setNomeProcesso(processo->nome);
+        quadros[idQuadro]->livre = 0;
+        *chamadas = atualizaChamadas(idQuadro, numChamadas, *chamadas);
+        numChamadas++;
     }
 
-    return idQuadros;
+    return quantidadeAAlocar;
 }
 
-/* Função usada para atualizar os contadores do LRU */
-void atualizarContadores(Pagina *quadros, int quantidadeDeQuadros, int quadroReferenciado)
+int obterPaginaPeloEndereco(
+    int endereco,
+    int tamanhoPagina)
 {
-    for (int i = 0; i < quantidadeDeQuadros; i++)
+    if (endereco < tamanhoPagina)
     {
-        quadros[i].contador >> 1;
-
-        if (quadroReferenciado == i)
-        {
-            quadros[i].contador = quadros[i].contador | 16;
-        }
+        return 0;
     }
+
+    return (int)((long)tamanhoPagina + (long)endereco - 1) / (long)endereco;
 }
 
 /* Função usada para realizar a leitura ou escrita de um endereço */
-int realizarLeituraOuEscrita(bool leitura, Pagina *quadros, Processo processo, int tamanhoPagina, int endereco, int quantidadeDePaginas)
+void realizarLeituraOuEscrita(
+    bool leitura,
+    Quadro **quadros,
+    Processo processo,
+    int tamanhoPagina,
+    int endereco,
+    int quantidadeDeQuadros,
+    int **chamadas,
+    int numChamadas)
 {
-    int idPagina = (int)((long)tamanhoPagina + (long)endereco - 1) / (long)endereco;
+    int idPagina = obterPaginaPeloEndereco(endereco, tamanhoPagina);
+    int test = processo.paginas[idPagina].idQuadro;
+    char *test2 = quadros[processo.paginas[idPagina].idQuadro]->nomeProcesso;
+    char *test3 = processo.nome;
 
-    if (processo.paginas[idPagina].idQuadro != -1 && strcmp(quadros[processo.paginas[idPagina].idQuadro].nomeProcesso, processo.nome) == 0)
+    // Se o quadro pertence ao processo, acessa o mesmo
+    if (processo.paginas[idPagina].idQuadro != -1 && strcmp(quadros[processo.paginas[idPagina].idQuadro]->nomeProcesso, processo.nome) == 0)
     {
         if (leitura)
         {
-            printf("Processo %s: Lendo endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, processo.paginas[idPagina].idQuadro);
+            printf("\nProcesso %s: Lendo endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, processo.paginas[idPagina].idQuadro);
+            *chamadas = atualizaChamadas(processo.paginas[idPagina].idQuadro, numChamadas, *chamadas);
         }
         else
         {
-            printf("Processo %s: Escrevendo no endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, processo.paginas[idPagina].idQuadro);
+            printf("\nProcesso %s: Escrevendo no endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, processo.paginas[idPagina].idQuadro);
+            *chamadas = atualizaChamadas(processo.paginas[idPagina].idQuadro, numChamadas, *chamadas);
         }
     }
     else
     {
-        printf("Page fault");
-        int idQuadro = executarLru(quadros, quantidadeDePaginas);
+        printf("\nPage fault");
+        int idQuadro = executarLru(quadros, quantidadeDeQuadros, *chamadas, numChamadas);
         processo.paginas[idPagina].idQuadro = idQuadro;
+        quadros[idQuadro]->setNomeProcesso(processo.nome);
 
-        printf("Processo %s: Swap in do quadro %d para a página %d", processo.nome, idQuadro, idPagina);
+        printf("\nProcesso %s: Swap in da página %d para o quadro %d", processo.nome, idPagina, idQuadro);
 
         if (leitura)
         {
-            printf("Processo %s: Lendo endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, idQuadro);
+            printf("\nProcesso %s: Lendo endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, idQuadro);
+            *chamadas = atualizaChamadas(idQuadro, numChamadas, *chamadas);
         }
         else
         {
-            printf("Processo %s: Escrevendo no endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, idQuadro);
+            printf("\nProcesso %s: Escrevendo no endereço %d da página %d -> quadro %d", processo.nome, endereco, idPagina, idQuadro);
+            *chamadas = atualizaChamadas(idQuadro, numChamadas, *chamadas);
         }
     }
 }
 
 /* Função usada para obter um processo de um array pelo seu nome */
-Processo obterProcessoPeloNome(char *nome, Processo processos[])
+Processo *obterProcessoPeloNome(char *nome, Processo **processos, int numProcessos)
 {
-    for (int i = 0; i < MAX_PROCESSES; i++)
+    for (int i = 0; i < numProcessos; i++)
     {
-        if (strcmp(processos[i].nome, nome))
+        char *test = processos[i]->nome;
+
+        if (!strcmp(processos[i]->nome, nome))
         {
             return processos[i];
         }
@@ -188,12 +270,12 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    Pagina **quadros = new Pagina *[quantidadeDeQuadros];
+    Quadro **quadros = (Quadro **)malloc(quantidadeDeQuadros * sizeof(Quadro));
 
     // Inicialização dos quadros da memória principal
     for (int i = 0; i < quantidadeDeQuadros; i++)
     {
-        Pagina *quadro = new Pagina();
+        Quadro *quadro = new Quadro();
         quadro->livre = 1;
         quadro->tamanho = tamanhoPagina;
 
@@ -215,9 +297,12 @@ int main(int argc, char *argv[])
     DispositivoES *dispositivoES = new DispositivoES();
     Cpu *cpu = new Cpu();
 
-    Processo *processos[MAX_PROCESSES];
+    Processo **processos = NULL;
     int numProcessos = 0;
     int noLinha = 0;
+
+    int *chamadas = NULL;
+    int numChamadas = 0;
 
     while (getline(&linha, &comprimento, arq) != -1)
     {
@@ -234,16 +319,47 @@ int main(int argc, char *argv[])
 
                 tamanho = obterTamanho(linha);
 
-                processos[numProcessos] = new Processo(nome, tamanho);
+                Processo *novoProcesso = new Processo(nome, tamanho, quantidadeDePaginas);
+                novoProcesso = alocarPaginas(novoProcesso, tamanhoPagina, quantidadeDePaginas, tamanho);
+
+                if (numProcessos == 0)
+                {
+                    processos = (Processo **)malloc(sizeof(Processo));
+                }
+                else
+                {
+                    processos = (Processo **)realloc(processos, (numProcessos + 1) * sizeof(Processo));
+                }
+
+                processos[numProcessos] = novoProcesso;
+
+                int quantidadeAlocada = alocarQuadros(processos[numProcessos], quadros, quantidadeDeQuadros, tamanho, tamanhoPagina, &chamadas, numChamadas);
+                numChamadas = numChamadas + quantidadeAlocada;
+                numProcessos++;
 
                 break;
             }
             case 'R':
             {
+                int endereco = obterEndereco(linha);
+
+                char *test = (*processos)[1].nome;
+
+                Processo *processo = obterProcessoPeloNome(nome, processos, numProcessos);
+
+                realizarLeituraOuEscrita(1, quadros, *processo, tamanhoPagina, endereco, quantidadeDeQuadros, &chamadas, numChamadas);
+                numChamadas = numChamadas + 1;
+
                 break;
             }
             case 'W':
             {
+                int endereco = obterEndereco(linha);
+                Processo *processo = obterProcessoPeloNome(nome, processos, numProcessos);
+
+                realizarLeituraOuEscrita(0, quadros, *processo, tamanhoPagina, endereco, quantidadeDeQuadros, &chamadas, numChamadas);
+                numChamadas = numChamadas + 1;
+
                 break;
             }
             case 'P':
@@ -262,6 +378,8 @@ int main(int argc, char *argv[])
             }
             }
         }
+
+        sleep(1);
 
         noLinha++;
     }

@@ -13,5 +13,5 @@ g++ main.cpp
 ```
 ## Como Executar ?
 ```bash
-./a.out
+./a.out [tamanhoDaPágina] [tamanhoEndereçoLógico] [tamanhoMemóriaFísica] [tamanhoMemóriaSecundária]
 ```

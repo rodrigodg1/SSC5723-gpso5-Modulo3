@@ -1,29 +1,31 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 class Processo
 {
 public:
-    char* nome;
-    size_t tamanho;
-    Pagina* paginas;
+    char *nome;
+    int tamanho;
+    Pagina *paginas;
     Processo();
-    Processo(char* nomeProcesso, size_t tamanhoProcesso);
+    Processo(char *nomeProcesso, int tamanhoProcesso, int quantidadeDePaginas);
     ~Processo();
 };
 
 Processo::Processo()
 {
-    
 }
 
-Processo::Processo(char* nomeProcesso, size_t tamanhoProcesso)
+Processo::Processo(char *nomeProcesso, int tamanhoProcesso, int quantidadeDePaginas)
 {
     printf("\nCriando processo %s", nomeProcesso);
-    this->tamanho = tamanhoProcesso; 
-    this->nome = nome;
+    this->tamanho = tamanhoProcesso;
+    this->nome = (char *)malloc(2 * sizeof(char));
+    this->paginas = (Pagina *)malloc(quantidadeDePaginas * sizeof(Pagina));
+    strcpy(this->nome, nomeProcesso);
 }
 
 Processo::~Processo()
 {
-
 }
