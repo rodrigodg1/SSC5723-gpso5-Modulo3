@@ -163,6 +163,7 @@ int alocarQuadros(
         quantidadeAAlocar = 1;
     }
 
+    // aloca os quadros para o processo
     for (int i = 0; i < quantidadeAAlocar; i++)
     {
         int idQuadro = executarLru(quadros, quantidadeDeQuadros, *chamadas, numChamadas);
@@ -264,12 +265,23 @@ int main(int argc, char *argv[])
     int quantidadeDePaginas = tamanhoEndLogico / tamanhoPagina;
     int quantidadeDeQuadros = tamanhoMemFisica / tamanhoPagina;
 
+
+    printf("\nTamanho da Pagina: %d\n", tamanhoPagina);
+    printf("\nTamanho do Endereco Logico: %d\n", tamanhoEndLogico);
+    printf("\nTamanho da Memoria Fisica : %d\n", tamanhoMemFisica);
+    printf("\nQuantidade de Paginas: %d\n", quantidadeDePaginas);
+    printf("\nQuantidade de Quadros: %d\n", quantidadeDeQuadros);
+
+    
+
+    // verifica se o tamanho da memoria fisica eh valida
     if (tamanhoMemFisica % tamanhoPagina != 0)
     {
-        printf("\nO tamanho da memória física deve ser múltiplo do tamanho das páginas");
+        printf("\nO tamanho da memória física deve ser múltiplo do tamanho das páginas \n");
         return -1;
     }
 
+    // aloca os quadros na memoria
     Quadro **quadros = (Quadro **)malloc(quantidadeDeQuadros * sizeof(Quadro));
 
     // Inicialização dos quadros da memória principal
@@ -277,6 +289,7 @@ int main(int argc, char *argv[])
     {
         Quadro *quadro = new Quadro();
         quadro->livre = 1;
+        //tamanho do quadro deve ser do tamanho da pagina
         quadro->tamanho = tamanhoPagina;
 
         quadros[i] = quadro;
@@ -294,8 +307,10 @@ int main(int argc, char *argv[])
     size_t comprimento = 0;
     char delim[] = " ";
 
+    // instancia um dispositivo E/S e CPU
     DispositivoES *dispositivoES = new DispositivoES();
     Cpu *cpu = new Cpu();
+
 
     Processo **processos = NULL;
     int numProcessos = 0;
@@ -304,6 +319,7 @@ int main(int argc, char *argv[])
     int *chamadas = NULL;
     int numChamadas = 0;
 
+    // faz a leitura do arquivo
     while (getline(&linha, &comprimento, arq) != -1)
     {
         if (noLinha != 0)
@@ -313,26 +329,32 @@ int main(int argc, char *argv[])
 
             switch (linha[3])
             {
+            //um processo deve ser criado
             case 'C':
             {
                 int tamanho;
 
+                // tamanho do processo (descrito no arquivo)
                 tamanho = obterTamanho(linha);
 
+                // cria um novo processo e aloca paginas para o novo processo
                 Processo *novoProcesso = new Processo(nome, tamanho, quantidadeDePaginas);
                 novoProcesso = alocarPaginas(novoProcesso, tamanhoPagina, quantidadeDePaginas, tamanho);
 
+                //verifica a quantidade de processos
                 if (numProcessos == 0)
                 {
                     processos = (Processo **)malloc(sizeof(Processo));
                 }
                 else
                 {
+                // aloca na proxima posicao
                     processos = (Processo **)realloc(processos, (numProcessos + 1) * sizeof(Processo));
                 }
-
+                
                 processos[numProcessos] = novoProcesso;
 
+                // armazena a quantidade alocada para o processo novo
                 int quantidadeAlocada = alocarQuadros(processos[numProcessos], quadros, quantidadeDeQuadros, tamanho, tamanhoPagina, &chamadas, numChamadas);
                 numChamadas = numChamadas + quantidadeAlocada;
                 numProcessos++;
@@ -341,12 +363,16 @@ int main(int argc, char *argv[])
             }
             case 'R':
             {
+                //obtem o endereco para leitura
                 int endereco = obterEndereco(linha);
 
+                //obtem o id do processo
                 char *test = (*processos)[1].nome;
 
+                //armazena o processo
                 Processo *processo = obterProcessoPeloNome(nome, processos, numProcessos);
 
+                //realiza a leitura
                 realizarLeituraOuEscrita(1, quadros, *processo, tamanhoPagina, endereco, quantidadeDeQuadros, &chamadas, numChamadas);
                 numChamadas = numChamadas + 1;
 
@@ -354,19 +380,25 @@ int main(int argc, char *argv[])
             }
             case 'W':
             {
+                // obtem o endereco para escrita
                 int endereco = obterEndereco(linha);
+
+                //obtem o nome do processo
                 Processo *processo = obterProcessoPeloNome(nome, processos, numProcessos);
 
+                //realiza a escrita
                 realizarLeituraOuEscrita(0, quadros, *processo, tamanhoPagina, endereco, quantidadeDeQuadros, &chamadas, numChamadas);
                 numChamadas = numChamadas + 1;
 
                 break;
             }
+            // instrucao a ser executada
             case 'P':
             {
                 cpu->executar(nome, (int)strtol(&linha[6], NULL, 10));
                 break;
             }
+            // instrucao de entrada e saida
             case 'I':
             {
                 dispositivoES->executar(nome, (int)strtol(&linha[6], NULL, 10));
