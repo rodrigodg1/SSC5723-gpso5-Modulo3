@@ -297,12 +297,15 @@ int main(int argc, char *argv[])
 
     FILE *arq;
 
+
+    // verifica se o arquivo existe
     if ((arq = fopen("entrada", "r")) == NULL)
     {
         printf("\nErro ao abrir o arquivo");
         return -1;
     }
 
+    // para a leitura do arquivo
     char *linha = NULL;
     size_t comprimento = 0;
     char delim[] = " ";
@@ -311,7 +314,7 @@ int main(int argc, char *argv[])
     DispositivoES *dispositivoES = new DispositivoES();
     Cpu *cpu = new Cpu();
 
-
+    // inicializa um ponteiro para processos
     Processo **processos = NULL;
     int numProcessos = 0;
     int noLinha = 0;
@@ -348,7 +351,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                // aloca na proxima posicao
+                // aloca em outra posicao redimensionada
                     processos = (Processo **)realloc(processos, (numProcessos + 1) * sizeof(Processo));
                 }
                 
@@ -366,10 +369,7 @@ int main(int argc, char *argv[])
                 //obtem o endereco para leitura
                 int endereco = obterEndereco(linha);
 
-                //obtem o id do processo
-                char *test = (*processos)[1].nome;
-
-                //armazena o processo
+                //ponteiro para o processo
                 Processo *processo = obterProcessoPeloNome(nome, processos, numProcessos);
 
                 //realiza a leitura
@@ -395,6 +395,7 @@ int main(int argc, char *argv[])
             // instrucao a ser executada
             case 'P':
             {
+                // converte a string para long int
                 cpu->executar(nome, (int)strtol(&linha[6], NULL, 10));
                 break;
             }
@@ -411,8 +412,10 @@ int main(int argc, char *argv[])
             }
         }
 
+    
         sleep(1);
 
+        // atualiza para a proxima linha
         noLinha++;
     }
 
